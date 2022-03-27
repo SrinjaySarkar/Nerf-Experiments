@@ -172,17 +172,6 @@ def run_1_nerf(height,width,focal_length,coarse_model,fine_model,ray_origin,ray_
     return (tuple(synthesized_images))
 
 
-def cast_to_image(tensor):
-    # Input tensor is (H, We, 3). Convert to (3, H, W).
-    tensor = tensor.permute(2, 0, 1)
-    # Convert to PIL Image and then np.array (output shape: (H, W, 3))
-    img = np.array(torchvision.transforms.ToPILImage()(tensor.detach().cpu()))
-    return img
-    # # Map back to shape (3, H, W), as tensorboard needs channels first.
-    # return np.moveaxis(img, [-1], [0])
-
-
-
 images,poses,bds,render_poses,test_idx=load_llff(basedir="/vinai/sskar/NERF/nerf_llff_data/fern",factor=8)
 hwf=poses[0,:3,-1]
 H,W,focal=hwf
