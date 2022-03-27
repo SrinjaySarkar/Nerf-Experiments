@@ -14,7 +14,7 @@ from model import get_embedding_function,nerf2,FlexibleNeRFModel,get_embedding_f
 from utils import get_image_rays,meshgrid,ndc_rays,get_minibatches,cumprod,sampling,psnr_loss,mse
 
 device=torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-weights_path="/vinai/sskar/NERF/ckpts/checkpoint249999.ckpt"
+weights_path="/vinai/sskar/NERF/ckpts/checkpoint.ckpt"
 img_save_path="/vinai/sskar/NERF/gen_imgs/"
 depth_save_path="/vinai/sskar/NERF/depth_imgs/"
 
