@@ -32,35 +32,6 @@ def get_image_rays(height,width,focal_length,c2w):
     return (ray_origins,ray_directions)
 
 
-def ndc_rays(H, W, focal, near, rays_o, rays_d):
-    # UNTESTED, but fairly sure.
-
-    # Shift rays origins to near plane
-    t = -(near + rays_o[..., 2]) / rays_d[..., 2]
-    rays_o = rays_o + t[..., None] * rays_d
-
-    # Projection
-    o0 = -1.0 / (W / (2.0 * focal)) * rays_o[..., 0] / rays_o[..., 2]
-    o1 = -1.0 / (H / (2.0 * focal)) * rays_o[..., 1] / rays_o[..., 2]
-    o2 = 1.0 + 2.0 * near / rays_o[..., 2]
-
-    d0 = (
-        -1.0
-        / (W / (2.0 * focal))
-        * (rays_d[..., 0] / rays_d[..., 2] - rays_o[..., 0] / rays_o[..., 2])
-    )
-    d1 = (
-        -1.0
-        / (H / (2.0 * focal))
-        * (rays_d[..., 1] / rays_d[..., 2] - rays_o[..., 1] / rays_o[..., 2])
-    )
-    d2 = -2.0 * near / rays_o[..., 2]
-
-    rays_o = torch.stack([o0, o1, o2], -1)
-    rays_d = torch.stack([d0, d1, d2], -1)
-
-    return rays_o, rays_d
-
 def ndc_rays(height,width,focal,near,r_origin,r_direction):
     """read ndc derivation"""
     #shift rays origin to near plane
