@@ -89,7 +89,7 @@ def pred_radiance(rays,coarse_model,fine_model,mode,encode_pos,encode_dir):
     # print("Z_vals:",z_vals.shape)
 
     mids=0.5*(z_vals[...,1:]+z_vals[...,:-1])#samples between every set of coarse points 
-    # print("Mids:",mids.shape)
+    # print("Mid:",mids.shape)
     # print(z_vals[0,1:],z_vals[0,:-1])
     # print(mids[0,0])
     upper=torch.cat((mids,z_vals[...,-1:]),dim=-1)#appending last and first points to the interval samples
