@@ -3,7 +3,17 @@ import numpy as np
 import torch
 import math
 import torch.nn.functional as F
-from load_data import load_llff
+device=torch.device("cpu")
+# from load_data import load_llff
+
+def get_rays_np(H, W, K, c2w):
+    i, j = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing='xy')
+    dirs = np.stack([(i-K[0][2])/K[0][0], -(j-K[1][2])/K[1][1], -np.ones_like(i)], -1)
+    # Rotate ray directions from camera frame to the world frame
+    rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3,:3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
+    # Translate camera frame's origin to the world frame. It is the origin of all rays.
+    rays_o = np.broadcast_to(c2w[:3,-1], np.shape(rays_d))
+    return rays_o,rays_d    
 
 
 def meshgrid(input1,input2):
@@ -32,6 +42,9 @@ def get_image_rays(height,width,focal_length,c2w):
     return (ray_origins,ray_directions)
 
 
+
+
+
 def ndc_rays(height,width,focal,near,r_origin,r_direction):
     """read ndc derivation"""
     #shift rays origin to near plane
@@ -48,6 +61,7 @@ def ndc_rays(height,width,focal,near,r_origin,r_direction):
     r_direction=torch.stack([d0,d1,d2],-1)
 
     return (r_origin,r_direction)
+
 
 def sampling(bins,weights,nf,det): # try naive hierarchical sampling
     weights+=1e-5#avoid underflow
@@ -105,6 +119,41 @@ def psnr_loss(mse):
         mse=1e-5
     psnr_val=-10.0*math.log10(mse)
     return (psnr_val)
+
+def hash_obj(points,hashmap_size):
+    primes=[1,2654435761,805459861,3674653429,2097192037,1434869437,2165219737]
+    xor_result=torch.zeros_like(points)[...,0]
+    
+    #per dimension xor
+    for i in range(points.shape[-1]):
+        xor_result^=points[...,i]*primes[i]#equation 4 in hash nerf paper
+    
+    #xor_result mod hashmap_size
+    #(xor_result % T)
+    return (torch.tensor((1<<hashmap_size)-1).to(xor_result.device)&xor_result)
+
+
+BOX_OFFSETS=torch.tensor([[[i,j,k] for i in [0, 1] for j in [0, 1] for k in [0, 1]]], device=device)
+
+def voxel_vertices(xyz,bounding_box,resolution,hashmap_size):
+    box_min,box_max=bounding_box
+    box_max=box_max.to(device)
+    box_min=box_min.to(device)
+    
+    if not torch.all(xyz<=box_max) or not torch.all(xyz>=box_min):
+        xyz=torch.clamp(xyz,min=box_min,max=box_max)
+    grid_size=(box_max-box_min)/resolution
+
+    bottom_left_idx=torch.floor((xyz-box_min)/grid_size).int()
+    voxel_min_vertex=bottom_left_idx*grid_size+box_min
+    voxel_max_vertex=voxel_min_vertex+torch.tensor([1.0,1.0,1.0]).to(device)*grid_size
+    voxel_indices=bottom_left_idx.unsqueeze(1) + BOX_OFFSETS
+    hashed_voxel_indices=hash_obj(voxel_indices,hashmap_size)
+
+    return (voxel_min_vertex,voxel_max_vertex,hashed_voxel_indices)
+
+
+
 
 
 # height=504
