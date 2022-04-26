@@ -197,3 +197,115 @@ class FlexibleNeRFModel(torch.nn.Module):
             return torch.cat((rgb, alpha), dim=-1)
         else:
             return self.fc_out(x)
+
+        
+class hash_embedding(torch.nn.Module):
+    #look at the table1 in paper for checking values 
+    def __init__(self,bounding_box,n_levels=16,n_features_per_level=2,log2_hashmap_size=19,base_resolution=16,finest_resolution=512):
+        super(hash_embedding,self).__init__()
+        self.bounding_box=bounding_box
+        self.n_levels=n_levels
+        self.n_features_per_level=n_features_per_level
+        self.log2_hashmap_size=log2_hashmap_size
+        self.base_resolution=torch.tensor(base_resolution)
+        self.finest_resolution=torch.tensor(finest_resolution)
+        self.out_dim=self.n_levels*self.n_features_per_level
+
+        self.b=torch.exp((torch.log(self.finest_resolution)-torch.log(self.base_resolution))/(n_levels-1))#equation3
+        self.hash_table=torch.nn.ModuleList([torch.nn.Embedding(2**self.log2_hashmap_size,self.n_features_per_level)for i in range(n_levels)])#table1
+        for _ in range(self.n_levels):
+            torch.nn.init.uniform_(self.hash_table[_].weight,a=-1e-4,b=1e-4)
+    
+    def interpolation(self,x,voxel_min_vertex,voxel_max_vertex,voxels):
+        #F.grid_sample?
+        # see wikipedia article for trilinear interpolation; code uses exact same logic
+        weights=(x-voxel_min_vertex)/(voxel_max_vertex-voxel_min_vertex)
+        #x axis
+        c00=voxels[:,0]*(1-weights[:,0].unsqueeze(1))+voxels[:,4]*weights[:,0].unsqueeze(1)
+        c01=voxels[:,1]*(1-weights[:,0].unsqueeze(1))+voxels[:,5]*weights[:,0].unsqueeze(1)
+        c10=voxels[:,2]*(1-weights[:,0].unsqueeze(1))+voxels[:,6]*weights[:,0].unsqueeze(1)
+        c11=voxels[:,3]*(1-weights[:,0].unsqueeze(1))+voxels[:,7]*weights[:,0].unsqueeze(1)
+
+        #y axis
+        c0=c00*(1-weights[:,1].unsqueeze(1))+c10*weights[:,1].unsqueeze(1)
+        c1=c01*(1-weights[:,1].unsqueeze(1))+c11*weights[:,1].unsqueeze(1)
+
+        #z axis
+        c=c0*(1-weights[:,2].unsqueeze(1))+c1*weights[:,2].unsqueeze(1)
+        
+        return (c)
+    
+    def forward(self,x):
+        x_embedded_all=[]
+        for i in range(self.n_levels):
+            resolution=torch.floor(self.base_resolution*self.b**i)#equation2
+            voxel_min_vertex,voxel_max_vertex,hashed_voxel_indices =voxel_vertices(x,self.bounding_box,resolution,self.log2_hashmap_size)
+            voxel_embeddings=self.hash_table[i](hashed_voxel_indices)
+
+            x_embedded=self.interpolation(x,voxel_min_vertex,voxel_max_vertex,voxel_embeddings)
+            x_embedded_all.append(x_embedded)
+        
+        x_embedded_all=torch.cat(x_embedded_all,dim=-1)
+        return (x_embedded_all)        
+
+
+        
+class hash_nerf(torch.nn.Module):#read section 5.4 two concatenated mlp for density and color
+    def __init__(self,n_layers=3,hidden_dim=64,geo_feat_dim=15,n_layers_color=4,hidden_dim_color=64,input_ch=3,input_ch_views=3):
+        super(hash_nerf,self).__init__()
+        self.input_ch=input_ch
+        self.input_ch_views=input_ch_views
+        self.n_layers=n_layers
+        self.hidden_dim=hidden_dim
+        self.geo_feat_dim=geo_feat_dim
+
+        sigma_net=[]
+        for i in range(n_layers):
+            if i==0:
+                in_dim=self.input_ch
+            else:
+                in_dim=hidden_dim
+            if i==n_layers-1:
+                out_dim=1+self.geo_feat_dim
+            else:
+                out_dim=hidden_dim
+            sigma_net.append(torch.nn.Linear(in_dim,out_dim,bias=False))
+        self.sigma_net=torch.nn.ModuleList(sigma_net)
+
+        self.n_layers_color=n_layers_color
+        self.hidden_dim_color=hidden_dim_color
+
+        color_net=[]
+        for i in range(n_layers_color):
+            if i==0:
+                in_dim=self.input_ch_views+self.geo_feat_dim
+            else:
+                in_dim=hidden_dim
+            if i==n_layers_color-1:
+                out_dim=3#rgb
+            else:
+                out_dim=hidden_dim
+            color_net.append(torch.nn.Linear(in_dim,out_dim,bias=False))
+        
+        self.color_net=torch.nn.ModuleList(color_net)
+    
+    def forward(self,x):
+        # input_points=x[...,:self.input_ch]
+        # input_views=x[...,-self.input_ch_views:]
+        input_points,input_views=torch.split(x,[self.input_ch,self.input_ch_views],dim=-1)
+        h=input_points
+        for i in range(self.n_layers):
+            h=self.sigma_net[i](h)
+            if i!=self.n_layers-1:
+                h=F.relu(h,inplace=True)
+        sigma,geo_feat=h[...,0],h[...,1:]
+
+        h=torch.cat([input_views,geo_feat],dim=-1)
+        for i in range(self.n_layers_color):
+            h=self.color_net[i](h)
+            if i!=self.n_layers_color-1:
+                h=F.relu(h,inplace=True)
+        
+        color=h
+        ops=torch.cat([color,sigma.unsqueeze(dim=-1)],dim=-1)
+        return (ops)
