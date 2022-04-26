@@ -7,7 +7,7 @@ Pytorch Implementation of Nerf with some additional experiments.Based on the pap
 
 
 ### To-DO
-- [ ] Add code for the hierarchical representation of radiance fields.
+- [x] Add code for the hierarchical representation of radiance fields.
 - [ ] Add code for synthetic scenes.
 
 ### Results on forward Facing Scenes
