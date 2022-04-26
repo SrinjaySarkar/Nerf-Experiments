@@ -3,7 +3,43 @@ import os
 import imageio
 from shutil import copy
 from subprocess import check_output
+from utils import *
 
+def get_bbox(poses,hwf,near=0.0,far=1.0): #this is done for all posed images at once
+    height,width,focal_length=hwf
+    height,width=int(height),int(width)
+
+    min_bound=[200,200,200]
+    max_bound=[-200,-200,-200]
+
+    points=[]
+    poses=torch.FloatTensor(poses)
+    for pose in poses:
+        ray_origin,ray_direction=get_image_rays(height,width,focal_length,pose)
+        ray_origin=ray_origin.view(-1,3)
+        ray_direction=ray_direction.view(-1,3)
+        ray_direction=ray_direction/ray_direction.norm(p=2,dim=-1).unsqueeze(-1)
+
+        ro,rd=ndc_rays(height,width,focal_length,1.0,ray_origin,ray_direction)
+
+        def min_max(pt):
+            for i in range(3):
+                if(min_bound[i]>pt[i]):
+                    min_bound[i]=pt[i]
+                if(max_bound[i]<pt[i]):
+                    max_bound[i]=pt[i]
+            return
+        for i in [0,width-1,height*width-width,height*width-1]:
+            #4 corner pixels of the image , bounds for all 
+            min_point=ro[i]+near*rd[i]
+            max_point=ro[i]+far*rd[i]
+
+            min_max(min_point)
+            min_max(max_point)
+    
+    return (torch.tensor(min_bound)-torch.tensor([0.1,0.1,0.0001]),torch.tensor(max_bound)+torch.tensor([0.1,0.1,0.0001]))
+    
+    
 def imread(f):
     if f.endswith("png"):
         return imageio.imread(f, ignoregamma=True)
@@ -264,6 +300,7 @@ def load_llff(basedir,factor=8,recenter=True,bd_factor=0.75,spherify=False):
     images=images.astype(np.float32)
     poses=poses.astype(np.float32)
     print("MY FUNCTION")
-    return (images,poses,bounds,spiral_poses,test_idx)
+    bounding_box=get_bbox(poses[:,:3,:4],poses[0,:3,-1],near=0.0,far=1.0)
+    return (images,poses,bounds,spiral_poses,test_idx,bounding_box)
 
 # img,img_pose,bds,spiral_pose,val_idx=load_llff(basedir="/vinai/sskar/NERF/nerf_llff_data/fern")
