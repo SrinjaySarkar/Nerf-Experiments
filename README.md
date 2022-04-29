@@ -11,5 +11,5 @@ Pytorch Implementation of Nerf with some additional experiments.Based on the pap
 - [ ] Add code for synthetic scenes.
 
 ### Results on forward Facing Scenes
-![Fern](fern.gif)
+![Fern](fern_recon.gif)
 
