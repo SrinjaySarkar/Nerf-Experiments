@@ -22,7 +22,7 @@ depth_save_path="/vinai/sskar/NERF/depth_imgs/"
 def volume_renderer(radiance_field,depth,ray_direction,noise,white_bg):
     one_e_10=torch.tensor([1e10],dtype=ray_direction.dtype,device=ray_direction.device)
     dists=depth[:,1:]-depth[:,:-1] #(4096,63)
-    dists=torch.cat((dists,one_e_10.expand(depth[:,:1].shape)),dim=-1)#4096,64
+    dists=torch.cat((dists,one_e_10.expand(depth[:,:1].shape)),dim=-1)#4096,64 (adding 1e10 as the distance for the last sample point; this means the the reiman sum with the last distance equals a big number)
     # dists=dists*ray_direction.unsqueeze(1).norm(p=2,dim=-1)
     dists=dists*ray_direction[...,None,:].norm(p=2, dim=-1)
     # dists=dists*ray_direction.unsqueeze(1)
