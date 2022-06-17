@@ -24,7 +24,7 @@ def volume_renderer(radiance_field,depth,ray_direction,noise,white_bg):
     dists=depth[:,1:]-depth[:,:-1] #(4096,63)
     dists=torch.cat((dists,one_e_10.expand(depth[:,:1].shape)),dim=-1)#4096,64 (adding 1e10 as the distance for the last sample point; this means the the reiman sum with the last distance equals a big number)
     # dists=dists*ray_direction.unsqueeze(1).norm(p=2,dim=-1)
-    dists=dists*ray_direction[...,None,:].norm(p=2, dim=-1)
+    dists=dists*ray_direction[...,None,:].norm(p=2, dim=-1)#this to convert to real world units.
     # dists=dists*ray_direction.unsqueeze(1)
     
     rgb=torch.sigmoid(radiance_field[...,:3])   
