@@ -13,3 +13,8 @@ Pytorch Implementation of Nerf with some additional experiments.Based on the pap
 ### Results on forward Facing Scenes
 ![Fern](fern_recon.gif)
 
+### Visualization of rendering camera poses
+![Cam Poses](nerf_cameras_val.gif)
+
+
+
